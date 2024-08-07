@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PV and IV Characteristics</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.0.0/dist/chartjs-plugin-zoom.min.js"></script>
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .container {
+            margin-top: 50px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-control {
+            border-radius: 0;
+        }
+        .btn-custom {
+            background-color: #007bff;
+            color: white;
+            border-radius: 0;
+            padding: 10px 20px;
+        }
+        .btn-custom:hover {
+            background-color: #0056b3;
+        }
+        .chart-container {
+            margin-top: 50px;
+        }
+        .zoom-controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .zoom-controls button {
+            margin: 0 10px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        .zoom-controls button:hover {
+            background-color: #0056b3;
+        }
+        @media (max-width: 576px) {
+            .form-control, .btn-custom {
+                font-size: 14px;
+                padding: 8px;
+            }
+            .zoom-controls button {
+                font-size: 12px;
+                padding: 8px 16px;
+            }
+        }
+        @media (min-width: 768px) {
+            .container {
+                max-width: 700px;
+            }
+        }
+        @media (min-width: 992px) {
+            .container {
+                max-width: 900px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center">PV and IV Characteristics</h1>
+        <form id="simulationForm" class="mt-4">
+            <div class="form-group row">
+                <label for="num_series" class="col-sm-12 col-md-4 col-form-label">Number of panels in series:</label>
+                <div class="col-sm-12 col-md-8">
+                    <input type="number" class="form-control" id="num_series" name="num_series" min="1" required>
+                </div>
+            </div>
+            <div class="form-group row">
+                <label for="num_parallel" class="col-sm-12 col-md-4 col-form-label">Number of panels in parallel:</label>
+                <div class="col-sm-12 col-md-8">
+                    <input type="number" class="form-control" id="num_parallel" name="num_parallel" min="1" required>
+                </div>
+            </div>
+            <div class="form-group row">
+                <label for="ambient_temp" class="col-sm-12 col-md-4 col-form-label">Ambient temperature (°C):</label>
+                <div class="col-sm-12 col-md-8">
+                    <input type="number" class="form-control" id="ambient_temp" name="ambient_temp" required>
+                </div>
+            </div>
+            <div class="form-group row">
+                <label for="solar_irradiance" class="col-sm-12 col-md-4 col-form-label">Solar irradiation (W/m²):</label>
+                <div class="col-sm-12 col-md-8">
+                    <input type="number" class="form-control" id="solar_irradiance" name="solar_irradiance" required>
+                </div>
+            </div>
+            <div class="text-center">
+                <button type="button" class="btn btn-custom" onclick="simulate()">Simulate</button>
+            </div>
+        </form>
+        <div class="zoom-controls">
+            <button onclick="zoomIn()">Zoom In</button>
+            <button onclick="zoomOut()">Zoom Out</button>
+            <button onclick="resetZoom()">Reset Zoom</button>
+        </div>
+        <div class="chart-container">
+            <canvas id="ivChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="pvChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let ivChart, pvChart;
+
+        async function simulate() {
+            const form = document.getElementById('simulationForm');
+            const formData = new FormData(form);
+
+            const data = {
+                num_series: formData.get('num_series'),
+                num_parallel: formData.get('num_parallel'),
+                ambient_temp: formData.get('ambient_temp'),
+                solar_irradiance: formData.get('solar_irradiance')
+            };
+
+            const response = await fetch('/simulate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            const ivCtx = document.getElementById('ivChart').getContext('2d');
+            const pvCtx = document.getElementById('pvChart').getContext('2d');
+
+            ivChart = new Chart(ivCtx, {
+                type: 'line',
+                data: {
+                    labels: result.voltage,
+                    datasets: [{
+                        label: 'I-V Curve',
+                        data: result.current.map((current, index) => ({ x: result.voltage[index], y: current })),
+                        borderColor: 'blue',
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        zoom: {
+                            pan: {
+                                enabled: true,
+                                mode: 'xy'
+                            },
+                            zoom: {
+                                enabled: true,
+                                mode: 'xy'
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'I-V Characteristics'
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            title: {
+                                display: true,
+                                text: 'Voltage (V)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value < 0 ? '' : value; // Remove negative labels
+                                }
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Current (A)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value < 0 ? '' : value; // Remove negative labels
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            pvChart = new Chart(pvCtx, {
+                type: 'line',
+                data: {
+                    labels: result.voltage,
+                    datasets: [{
+                        label: 'P-V Curve',
+                        data: result.power.map((power, index) => ({ x: result.voltage[index], y: power })),
+                        borderColor: 'red',
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        zoom: {
+                            pan: {
+                                enabled: true,
+                                mode: 'xy'
+                            },
+                            zoom: {
+                                enabled: true,
+                                mode: 'xy'
+                            }
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'P-V Characteristics'
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            title: {
+                                display: true,
+                                text: 'Voltage (V)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value < 0 ? '' : value; // Remove negative labels
+                                }
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Power (W)'
+                            },
+                            ticks: {
+                                callback: function(value) {
+                                    return value < 0 ? '' : value; // Remove negative labels
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function zoomIn() {
+            ivChart.zoom(1.2);
+            pvChart.zoom(1.2);
+        }
+
+        function zoomOut() {
+            ivChart.zoom(0.8);
+            pvChart.zoom(0.8);
+        }
+
+        function resetZoom() {
+            ivChart.resetZoom();
+            pvChart.resetZoom();
+        }
+    </script>
+</body>
+</html>
